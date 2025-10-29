@@ -1,0 +1,28 @@
+[monitoring]
+auth_log_path = "/tmp/test_logs/auth.log"
+wtmp_path = "/var/log/wtmp"
+btmp_path = "/var/log/btmp"
+utmp_path = "/var/run/utmp"
+
+[deduplication]
+enabled = true
+window_seconds = 10
+
+[defuse]
+timeout_seconds = 60
+artifact_directory = "/tmp/defuse"
+require_signature = false
+
+[alerts]
+enabled = true
+rate_limit_per_hour = 10
+
+[alerts.discord]
+enabled = true
+webhook_url = "<webhook_url>"
+
+[logging]
+level = "DEBUG"
+file = "/var/log/defuse/monitor.log"
+max_size_mb = 100
+backup_count = 5

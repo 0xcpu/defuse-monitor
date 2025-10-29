@@ -1,0 +1,33 @@
+[Unit]
+Description=Defuse Monitor - Linux Login Monitoring System
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=defuse-monitor
+Group=defuse-monitor
+ExecStart=/usr/local/bin/uv run python -m defuse_monitor --config /etc/defuse/defuse.toml
+WorkingDirectory=/opt/defuse-monitor
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/run/defuse /var/log/defuse
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Capabilities needed for log file access
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+
+Environment=PYTHONPATH=/opt/defuse-monitor/src
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
