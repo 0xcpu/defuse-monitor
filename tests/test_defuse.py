@@ -5,13 +5,10 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import pytest
-
 from defuse_monitor.core.events import LoginEvent
 from defuse_monitor.defuse.handler import DefuseHandler
 
 
-@pytest.mark.asyncio
 async def test_defuse_mechanism_success():
     """Test successful defuse with artifact creation."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -43,7 +40,6 @@ async def test_defuse_mechanism_success():
         assert result is True
 
 
-@pytest.mark.asyncio
 async def test_defuse_mechanism_timeout():
     """Test defuse timeout when no artifact is created."""
     with tempfile.TemporaryDirectory() as temp_dir:

@@ -133,8 +133,11 @@ def _create_monitor_tasks(
                     event = processed_event
 
                 await event_dispatcher.dispatch(event)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.error(f"Monitor {name} failed: {e}", exc_info=True)
+            logger.warning(f"Monitor {name} will not be restarted automatically")
 
     for monitor_name, monitor_async_gen in monitors:
         task = asyncio.create_task(monitor_wrapper(monitor_name, monitor_async_gen))
@@ -201,6 +204,7 @@ async def main_loop(config: Config):
         logger.info("Keyboard interrupt received")
     finally:
         await _shutdown_tasks(tasks)
+        await alert_dispatcher.close()
 
 
 def main():
@@ -213,7 +217,7 @@ def main():
     )
     parser.add_argument(
         "--log-level",
-        choices=list(LogLevel.__annotations__.keys()),
+        choices=[level.value for level in LogLevel],
         default="INFO",
         help="Logging level",
     )

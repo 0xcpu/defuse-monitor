@@ -18,7 +18,20 @@ class AlertDispatcher:
         webhook_url: str | None = None,
     ):
         self.discord_enabled = discord_enabled
-        self.webhook_url = webhook_url
+        self.webhook_url = str(webhook_url) if webhook_url else None
+        self._session: aiohttp.ClientSession | None = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create a reusable aiohttp session."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def close(self):
+        """Close the aiohttp session."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
 
     async def send_alert(self, login_event: LoginEvent):
         """Dispatch alert through configured channels."""
@@ -55,14 +68,14 @@ class AlertDispatcher:
                 "avatar_url": None,
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.webhook_url, json=data) as response:
-                    if response.status == 204:  # Discord webhook returns 204 on success
-                        logger.info("Discord webhook alert sent successfully")
-                    else:
-                        logger.error(f"Discord webhook failed: {response.status}")
-                        error_text = await response.text()
-                        logger.error(f"Discord webhook error: {error_text}")
+            session = await self._get_session()
+            async with session.post(self.webhook_url, json=data) as response:
+                if response.status == 204:  # Discord webhook returns 204 on success
+                    logger.info("Discord webhook alert sent successfully")
+                else:
+                    logger.error(f"Discord webhook failed: {response.status}")
+                    error_text = await response.text()
+                    logger.error(f"Discord webhook error: {error_text}")
 
         except Exception as e:
             logger.error(f"Discord webhook alert failed: {e}")

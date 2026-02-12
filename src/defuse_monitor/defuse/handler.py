@@ -66,14 +66,14 @@ class DefuseHandler:
     async def wait_for_artifact(self, path: Path, timeout: int) -> bool:
         """Wait for artifact file creation."""
         # TODO: check if inotify-based monitoring would be more efficient?
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
         while True:
             if path.exists():
                 logger.info(f"Artifact found: {path}")
                 return True
 
-            current_time = asyncio.get_event_loop().time()
+            current_time = asyncio.get_running_loop().time()
             if current_time - start_time >= timeout:
                 return False
 

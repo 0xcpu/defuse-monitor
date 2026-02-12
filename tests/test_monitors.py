@@ -4,8 +4,6 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from defuse_monitor.monitors.auth_log import AuthLogMonitor
 
 
@@ -112,7 +110,6 @@ def test_auth_log_patterns():
     assert su_match.group(2) == "alice"
 
 
-@pytest.mark.asyncio
 async def test_auth_log_file_monitoring():
     """Test file monitoring functionality."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -140,7 +137,6 @@ async def test_auth_log_file_monitoring():
             pass
 
 
-@pytest.mark.asyncio
 async def test_auth_log_nonexistent_file():
     """Test handling of nonexistent log file."""
     monitor = AuthLogMonitor("/nonexistent/path/auth.log")

@@ -210,10 +210,12 @@ class AccountingFilesMonitor:
         host = record["host"]
 
         login_type: Literal["ssh", "console", "su", "other"]
-        if line.startswith("pts/") or (line.startswith("tty") and host):
+        if host and (line.startswith("pts/") or line.startswith("tty")):
             login_type = "ssh"
         elif line.startswith("tty"):
             login_type = "console"
+        elif line.startswith("pts/"):
+            login_type = "other"  # could be tmux, screen, GUI terminal
         else:
             login_type = "other"
 

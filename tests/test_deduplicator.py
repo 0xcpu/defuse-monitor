@@ -27,7 +27,6 @@ def sample_event():
     )
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_unique_event(deduplicator, sample_event):
     """Test that unique events are passed through."""
     result = await deduplicator.process_event(sample_event)
@@ -38,7 +37,6 @@ async def test_deduplicator_unique_event(deduplicator, sample_event):
     assert result.detected_by == ["auth_log"]
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_duplicate_event(deduplicator):
     """Test that duplicate events are filtered out."""
     event1 = LoginEvent(
@@ -68,7 +66,6 @@ async def test_deduplicator_duplicate_event(deduplicator):
     assert result2 is None
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_enrichment(deduplicator):
     """Test that duplicate events enrich the existing event."""
     event1 = LoginEvent(
@@ -103,7 +100,6 @@ async def test_deduplicator_enrichment(deduplicator):
     assert cached_event.session_id == "12345"  # Enriched with new data
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_different_users(deduplicator):
     """Test that events from different users are not deduplicated."""
     timestamp = datetime.now(UTC)
@@ -134,7 +130,6 @@ async def test_deduplicator_different_users(deduplicator):
     assert result2.username == "bob"
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_different_source_ips(deduplicator):
     """Test that events with different source IPs are not deduplicated."""
     timestamp = datetime.now(UTC)
@@ -163,7 +158,6 @@ async def test_deduplicator_different_source_ips(deduplicator):
     assert result2 is not None
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_time_window(deduplicator):
     """Test that events outside the time window are not deduplicated."""
     now = datetime.now(UTC)
@@ -193,7 +187,6 @@ async def test_deduplicator_time_window(deduplicator):
     assert result2 is not None
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_within_time_window(deduplicator):
     """Test that events within the time window are deduplicated."""
     now = datetime.now(UTC)
@@ -222,7 +215,6 @@ async def test_deduplicator_within_time_window(deduplicator):
     assert result2 is None  # Should be filtered as duplicate
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_cleanup_old_events():
     """Test that old events are cleaned up from cache."""
     deduplicator = EventDeduplicator(window_seconds=1)  # Short window for testing
@@ -257,7 +249,6 @@ async def test_deduplicator_cleanup_old_events():
     assert deduplicator.recent_events[0][0].username == "bob"
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_session_id_matching(deduplicator):
     """Test that events with matching session IDs are deduplicated."""
     timestamp = datetime.now(UTC)
@@ -285,7 +276,6 @@ async def test_deduplicator_session_id_matching(deduplicator):
     assert result2 is None  # Same session ID, should be duplicate
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_session_id_mismatch(deduplicator):
     """Test that events with different session IDs are not deduplicated."""
     timestamp = datetime.now(UTC)
@@ -313,7 +303,6 @@ async def test_deduplicator_session_id_mismatch(deduplicator):
     assert result2 is not None  # Different session IDs
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_tty_matching(deduplicator):
     """Test that events with matching TTY are deduplicated."""
     timestamp = datetime.now(UTC)
@@ -341,7 +330,6 @@ async def test_deduplicator_tty_matching(deduplicator):
     assert result2 is None  # Same TTY, should be duplicate
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_partial_data_enrichment(deduplicator):
     """Test enrichment when events have partial data."""
     timestamp = datetime.now(UTC)
@@ -377,7 +365,6 @@ async def test_deduplicator_partial_data_enrichment(deduplicator):
     assert cached_event.detected_by == ["auth_log", "utmp"]
 
 
-@pytest.mark.asyncio
 async def test_deduplicator_concurrent_events(deduplicator):
     """Test that deduplicator handles concurrent events correctly."""
     timestamp = datetime.now(UTC)

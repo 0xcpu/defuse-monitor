@@ -60,7 +60,7 @@ class _LogFileHandler(FileSystemEventHandler):
             return
 
         try:
-            # chedule the coroutine to run in the main event loop from this thread
+            # Schedule the coroutine to run in the main event loop from this thread
             future = asyncio.run_coroutine_threadsafe(coro, self._event_loop)
             self._background_tasks.add(future)
             future.add_done_callback(self._background_tasks.discard)
@@ -103,7 +103,7 @@ class _LogFileHandler(FileSystemEventHandler):
         try:
             current_stat = self.monitor.log_path.stat()
             if self._current_inode and current_stat.st_ino != self._current_inode:
-                # fiile was rotated, handle it
+                # file was rotated, handle it
                 self._schedule_task(self._handle_rotation())
                 return False
             return True
