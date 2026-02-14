@@ -3,6 +3,7 @@
 import logging
 
 import aiohttp
+from pydantic import HttpUrl
 
 from ..core.events import LoginEvent
 
@@ -15,7 +16,7 @@ class AlertDispatcher:
     def __init__(
         self,
         discord_enabled: bool = False,
-        webhook_url: str | None = None,
+        webhook_url: HttpUrl | None = None,
     ):
         self.discord_enabled = discord_enabled
         self.webhook_url = str(webhook_url) if webhook_url else None
@@ -37,13 +38,10 @@ class AlertDispatcher:
         """Dispatch alert through configured channels."""
         message = self._format_alert_message(login_event)
 
-        logger.warning(f"ALERT: {message}")
+        logger.warning("ALERT: %s", message)
 
-        # Send through configured channels
         if self.discord_enabled and self.webhook_url:
             await self.send_discord_webhook(message)
-
-        # TODO: Add other alert channels (email, webhook, etc.)
 
     def _format_alert_message(self, login_event: LoginEvent) -> str:
         """Format login event into alert message."""
@@ -61,7 +59,6 @@ class AlertDispatcher:
             return
 
         try:
-            # Discord webhook payload
             data = {
                 "content": message,
                 "username": "Defuse Monitor",
@@ -73,10 +70,10 @@ class AlertDispatcher:
                 if response.status == 204:  # Discord webhook returns 204 on success
                     logger.info("Discord webhook alert sent successfully")
                 else:
-                    logger.error(f"Discord webhook failed: {response.status}")
+                    logger.error("Discord webhook failed: %s", response.status)
                     error_text = await response.text()
-                    logger.error(f"Discord webhook error: {error_text}")
+                    logger.error("Discord webhook error: %s", error_text)
 
         except Exception as e:
-            logger.error(f"Discord webhook alert failed: {e}")
-            logger.warning(f"Discord Alert (NOT SENT): {message}")
+            logger.error("Discord webhook alert failed: %s", e)
+            logger.warning("Discord Alert (NOT SENT): %s", message)

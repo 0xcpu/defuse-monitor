@@ -23,7 +23,7 @@ class EventDispatcher:
 
     async def dispatch(self, event: LoginEvent) -> None:
         """Dispatch an event to all registered handlers."""
-        logger.info(f"Dispatching login event: {event.username}@{event.source_ip}")
+        logger.info("Dispatching login event: %s@%s", event.username, event.source_ip)
 
         tasks = [handler(event) for handler in self._handlers]
         if tasks:

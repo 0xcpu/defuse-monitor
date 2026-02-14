@@ -48,7 +48,7 @@ class AccountingFilesMonitor:
     def _check_file_exists(self, file_path: Path, file_type: str) -> bool:
         """Check if file exists and log appropriate message."""
         if not file_path.exists():
-            logger.warning(f"{file_type} file does not exist: {file_path}")
+            logger.warning("%s file does not exist: %s", file_type, file_path)
             return False
         return True
 
@@ -70,7 +70,7 @@ class AccountingFilesMonitor:
                     if record and self._is_login_record(record):
                         records.append(record)
         except OSError as e:
-            logger.error(f"Error reading {file_path}: {e}")
+            logger.error("Error reading %s: %s", file_path, e)
         return records
 
     def _process_new_wtmp_records(self, new_data: bytes) -> list[LoginEvent]:
@@ -140,10 +140,10 @@ class AccountingFilesMonitor:
             logger.debug("wtmp file not found, waiting for rotation...")
             await asyncio.sleep(self.poll_interval)
         elif isinstance(error, OSError):
-            logger.error(f"Error reading wtmp: {error}")
+            logger.error("Error reading wtmp: %s", error)
             await asyncio.sleep(5.0)
         else:
-            logger.error(f"Unexpected error in wtmp monitor: {error}", exc_info=True)
+            logger.error("Unexpected error in wtmp monitor: %s", error, exc_info=True)
             await asyncio.sleep(1.0)
 
     def parse_utmp_record(self, data: bytes) -> dict[str, Any] | None:
@@ -193,7 +193,7 @@ class AccountingFilesMonitor:
             }
 
         except (struct.error, UnicodeDecodeError, ValueError, OSError) as e:
-            logger.debug(f"Failed to parse utmp record: {e}")
+            logger.debug("Failed to parse utmp record: %s", e)
             return None
 
     def _is_login_record(self, record: dict[str, Any]) -> bool:
@@ -231,7 +231,7 @@ class AccountingFilesMonitor:
 
     async def monitor_wtmp(self) -> AsyncIterator[LoginEvent]:
         """Monitor wtmp for new login records."""
-        logger.info(f"Starting wtmp monitor on {self.wtmp_path}")
+        logger.info("Starting wtmp monitor on %s", self.wtmp_path)
 
         if not self._check_file_exists(self.wtmp_path, "wtmp"):
             return
@@ -241,7 +241,7 @@ class AccountingFilesMonitor:
             last_position = self.wtmp_path.stat().st_size
             last_inode = self.wtmp_path.stat().st_ino
         except OSError as e:
-            logger.error(f"Cannot access wtmp file: {e}")
+            logger.error("Cannot access wtmp file: %s", e)
             return
 
         while True:
@@ -277,7 +277,7 @@ class AccountingFilesMonitor:
 
     async def monitor_utmp(self) -> AsyncIterator[LoginEvent]:
         """Monitor utmp for changes in logged-in users."""
-        logger.info(f"Starting utmp monitor on {self.utmp_path}")
+        logger.info("Starting utmp monitor on %s", self.utmp_path)
 
         if not self._check_file_exists(self.utmp_path, "utmp"):
             return
@@ -300,8 +300,8 @@ class AccountingFilesMonitor:
                 await asyncio.sleep(self.poll_interval)
 
             except OSError as e:
-                logger.error(f"Error reading utmp: {e}")
+                logger.error("Error reading utmp: %s", e)
                 await asyncio.sleep(5.0)
             except Exception as e:
-                logger.error(f"Unexpected error in utmp monitor: {e}", exc_info=True)
+                logger.error("Unexpected error in utmp monitor: %s", e, exc_info=True)
                 await asyncio.sleep(1.0)
