@@ -43,37 +43,37 @@ class DefuseHandler:
         artifact_path = self.artifact_directory / f"{session_id}.key"
 
         logger.info(
-            f"Initiating defuse for {login_event.username}, session: {session_id}"
+            "Initiating defuse for %s, session: %s", login_event.username, session_id
         )
-        logger.info(f"Waiting for artifact at: {artifact_path}")
+        logger.info("Waiting for artifact at: %s", artifact_path)
 
         try:
             self.artifact_directory.mkdir(parents=True, exist_ok=True)
             defused = await self.wait_for_artifact(artifact_path, self.timeout_seconds)
             if defused:
-                logger.info(f"Login defused for {login_event.username}")
+                logger.info("Login defused for %s", login_event.username)
                 if artifact_path.exists():
                     artifact_path.unlink()
             else:
-                logger.warning(f"Defuse timeout for {login_event.username}")
+                logger.warning("Defuse timeout for %s", login_event.username)
 
             return defused
 
         except Exception as e:
-            logger.error(f"Error in defuse mechanism: {e}")
+            logger.error("Error in defuse mechanism: %s", e)
             return False
 
     async def wait_for_artifact(self, path: Path, timeout: int) -> bool:
         """Wait for artifact file creation."""
         # TODO: check if inotify-based monitoring would be more efficient?
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
         while True:
             if path.exists():
-                logger.info(f"Artifact found: {path}")
+                logger.info("Artifact found: %s", path)
                 return True
 
-            current_time = asyncio.get_event_loop().time()
+            current_time = asyncio.get_running_loop().time()
             if current_time - start_time >= timeout:
                 return False
 

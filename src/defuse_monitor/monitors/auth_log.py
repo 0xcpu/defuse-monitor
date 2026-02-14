@@ -30,7 +30,7 @@ class _LogFileHandler(FileSystemEventHandler):
         self.monitor = monitor_instance
         self.queue: asyncio.Queue[LoginEvent] = None  # set by monitor
         self._event_loop: asyncio.AbstractEventLoop = None  # set by monitor
-        self._file_handle: io.TextIOWrapper = None
+        self._file_handle: io.TextIOWrapper | None = None
         self._current_inode = None
         self._position: int = 0
         self._partial_line: str = ""
@@ -60,12 +60,11 @@ class _LogFileHandler(FileSystemEventHandler):
             return
 
         try:
-            # chedule the coroutine to run in the main event loop from this thread
             future = asyncio.run_coroutine_threadsafe(coro, self._event_loop)
             self._background_tasks.add(future)
             future.add_done_callback(self._background_tasks.discard)
         except Exception as e:
-            logger.error(f"Failed to schedule task from watchdog thread: {e}")
+            logger.error("Failed to schedule task from watchdog thread: %s", e)
 
     async def _handle_rotation(self):
         """Handle log file rotation."""
@@ -95,7 +94,7 @@ class _LogFileHandler(FileSystemEventHandler):
             await self._read_and_process_new_content()
 
         except OSError as e:
-            logger.error(f"Error reading log file: {e}")
+            logger.error("Error reading log file: %s", e)
             self._close_file()
 
     def _check_file_rotation(self) -> bool:
@@ -103,7 +102,7 @@ class _LogFileHandler(FileSystemEventHandler):
         try:
             current_stat = self.monitor.log_path.stat()
             if self._current_inode and current_stat.st_ino != self._current_inode:
-                # fiile was rotated, handle it
+                # file was rotated, handle it
                 self._schedule_task(self._handle_rotation())
                 return False
             return True
@@ -218,10 +217,10 @@ class AuthLogMonitor:
     async def monitor(self) -> AsyncIterator[LoginEvent]:
         """Monitor the authentication log for new login events."""
 
-        logger.info(f"Starting auth log monitor on {self.log_path}")
+        logger.info("Starting auth log monitor on %s", self.log_path)
 
         if not self.log_path.exists():
-            logger.warning(f"Auth log file does not exist: {self.log_path}")
+            logger.warning("Auth log file does not exist: %s", self.log_path)
             return
 
         try:
@@ -230,11 +229,12 @@ class AuthLogMonitor:
             logger.info("Auth log file is readable")
         except PermissionError:
             logger.error(
-                f"Permission denied reading {self.log_path}. Try running with sudo or add user to 'adm' group"
+                "Permission denied reading %s. Try running with sudo or add user to 'adm' group",
+                self.log_path,
             )
             return
         except Exception as e:
-            logger.error(f"Cannot read auth log file: {e}")
+            logger.error("Cannot read auth log file: %s", e)
             return
 
         try:
@@ -242,7 +242,7 @@ class AuthLogMonitor:
             async for event in self._monitor_with_watchdog():
                 yield event
         except Exception as e:
-            logger.warning(f"Watchdog monitoring failed: {e}, falling back to polling")
+            logger.warning("Watchdog monitoring failed: %s, falling back to polling", e)
             logger.info("Starting polling-based monitoring")
             async for event in self._monitor_with_polling():
                 yield event
@@ -282,7 +282,7 @@ class AuthLogMonitor:
                 inode = self.log_path.stat().st_ino
                 return position, inode, ""
         except OSError as e:
-            logger.error(f"Cannot access log file: {e}")
+            logger.error("Cannot access log file: %s", e)
             return None
 
     def _check_rotation(self, last_inode):
@@ -351,8 +351,8 @@ class AuthLogMonitor:
                 await asyncio.sleep(1.0)
 
             except OSError as e:
-                logger.error(f"Error polling log file: {e}")
+                logger.error("Error polling log file: %s", e)
                 await asyncio.sleep(5.0)
             except Exception as e:
-                logger.error(f"Unexpected error in polling: {e}")
+                logger.error("Unexpected error in polling: %s", e)
                 await asyncio.sleep(1.0)

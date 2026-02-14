@@ -41,7 +41,7 @@ def _initialize_components(
             window_seconds=config.deduplication.window_seconds
         )
         logger.info(
-            f"Event deduplication enabled (window: {config.deduplication.window_seconds}s)"
+            "Event deduplication enabled (window: %ss)", config.deduplication.window_seconds
         )
     else:
         logger.info("Event deduplication disabled")
@@ -65,7 +65,7 @@ def _create_login_event_handler(
     async def handle_login_event(event: LoginEvent):
         """Handle a detected login event."""
         logger.info(
-            f"Login detected: {event.username} via {event.login_type} from {event.source_ip or 'local'}"
+            "Login detected: %s via %s from %s", event.username, event.login_type, event.source_ip or "local"
         )
 
         defused = await defuse_handler.initiate_defuse(event)
@@ -83,9 +83,9 @@ def _initialize_monitors(config: Config) -> list[tuple[str, AsyncIterator[LoginE
     if Path(config.monitoring.auth_log_path).exists():
         auth_monitor = AuthLogMonitor(config.monitoring.auth_log_path)
         monitors.append(("auth_log", auth_monitor.monitor()))
-        logger.info(f"Auth log monitor initialized: {config.monitoring.auth_log_path}")
+        logger.info("Auth log monitor initialized: %s", config.monitoring.auth_log_path)
     else:
-        logger.warning(f"Auth log file not found: {config.monitoring.auth_log_path}")
+        logger.warning("Auth log file not found: %s", config.monitoring.auth_log_path)
 
     if Path(config.monitoring.wtmp_path).exists():
         accounting_monitor = AccountingFilesMonitor(
@@ -93,9 +93,9 @@ def _initialize_monitors(config: Config) -> list[tuple[str, AsyncIterator[LoginE
             utmp_path=config.monitoring.utmp_path,
         )
         monitors.append(("wtmp", accounting_monitor.monitor_wtmp()))
-        logger.info(f"wtmp monitor initialized: {config.monitoring.wtmp_path}")
+        logger.info("wtmp monitor initialized: %s", config.monitoring.wtmp_path)
     else:
-        logger.warning(f"wtmp file not found: {config.monitoring.wtmp_path}")
+        logger.warning("wtmp file not found: %s", config.monitoring.wtmp_path)
 
     if Path(config.monitoring.utmp_path).exists():
         # Reuse the same monitor instance if wtmp exists
@@ -105,9 +105,9 @@ def _initialize_monitors(config: Config) -> list[tuple[str, AsyncIterator[LoginE
                 utmp_path=config.monitoring.utmp_path,
             )
         monitors.append(("utmp", accounting_monitor.monitor_utmp()))
-        logger.info(f"utmp monitor initialized: {config.monitoring.utmp_path}")
+        logger.info("utmp monitor initialized: %s", config.monitoring.utmp_path)
     else:
-        logger.warning(f"utmp file not found: {config.monitoring.utmp_path}")
+        logger.warning("utmp file not found: %s", config.monitoring.utmp_path)
 
     return monitors
 
@@ -119,22 +119,25 @@ def _create_monitor_tasks(
     tasks = []
 
     async def monitor_wrapper(name, async_gen):
-        logger.info(f"Starting monitor: {name}")
+        logger.info("Starting monitor: %s", name)
         try:
             async for event in async_gen:
-                logger.debug(f"Monitor {name} received event: {event}")
+                logger.debug("Monitor %s received event: %s", name, event)
 
                 if deduplicator:
                     processed_event = await deduplicator.process_event(event)
                     if processed_event is None:
-                        logger.debug(f"Skipped duplicate event from {name}")
+                        logger.debug("Skipped duplicate event from %s", name)
                         continue
 
                     event = processed_event
 
                 await event_dispatcher.dispatch(event)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
-            logger.error(f"Monitor {name} failed: {e}", exc_info=True)
+            logger.error("Monitor %s failed: %s", name, e, exc_info=True)
+            logger.warning("Monitor %s will not be restarted automatically", name)
 
     for monitor_name, monitor_async_gen in monitors:
         task = asyncio.create_task(monitor_wrapper(monitor_name, monitor_async_gen))
@@ -192,7 +195,7 @@ async def main_loop(config: Config):
         return
 
     tasks = _create_monitor_tasks(monitors, event_dispatcher, deduplicator)
-    logger.info(f"Started {len(tasks)} monitoring tasks")
+    logger.info("Started %d monitoring tasks", len(tasks))
 
     shutdown_event = _setup_signal_handlers()
     try:
@@ -201,6 +204,7 @@ async def main_loop(config: Config):
         logger.info("Keyboard interrupt received")
     finally:
         await _shutdown_tasks(tasks)
+        await alert_dispatcher.close()
 
 
 def main():
@@ -213,7 +217,7 @@ def main():
     )
     parser.add_argument(
         "--log-level",
-        choices=list(LogLevel.__annotations__.keys()),
+        choices=[level.value for level in LogLevel],
         default="INFO",
         help="Logging level",
     )
@@ -233,19 +237,19 @@ def main():
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
-        logger.info(f"Configuration loaded from: {args.config}")
-        logger.info(f"Logging level set to: {logging.getLevelName(log_level)}")
+        logger.info("Configuration loaded from: %s", args.config)
+        logger.info("Logging level set to: %s", logging.getLevelName(log_level))
 
         asyncio.run(main_loop(config))
 
     except FileNotFoundError as e:
-        logger.error(f"Configuration file not found: {e}")
+        logger.error("Configuration file not found: %s", e)
         sys.exit(1)
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
         sys.exit(0)
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
+        logger.error("Fatal error: %s", e)
         sys.exit(1)
 
 

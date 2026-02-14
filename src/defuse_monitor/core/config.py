@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import toml
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 
 
 class MonitoringConfig(BaseModel):
@@ -34,7 +34,7 @@ class DiscordConfig(BaseModel):
     """Discord webhook alert configuration."""
 
     enabled: bool = False
-    webhook_url: str | None = None
+    webhook_url: HttpUrl | None = None
 
 
 class AlertsConfig(BaseModel):

@@ -233,7 +233,28 @@ def test_record_to_login_event_other():
     assert event.login_type == "other"
 
 
-@pytest.mark.asyncio
+def test_record_to_login_event_pts_without_host():
+    """Test that pts/ without hostname is classified as 'other', not 'ssh'."""
+    monitor = AccountingFilesMonitor()
+    record = {
+        "type": USER_PROCESS,
+        "pid": 3000,
+        "user": "alice",
+        "host": "",
+        "line": "pts/0",
+        "session": 50,
+        "timestamp": monitor.parse_utmp_record(create_utmp_record(tv_sec=1700000000))[
+            "timestamp"
+        ],
+    }
+
+    event = monitor._record_to_login_event(record, "wtmp")
+
+    assert event.username == "alice"
+    assert event.login_type == "other"  # pts/ without host could be tmux/screen
+    assert event.source_ip is None
+
+
 async def test_monitor_wtmp_nonexistent_file():
     """Test wtmp monitor with non-existent file."""
     monitor = AccountingFilesMonitor(wtmp_path="/nonexistent/wtmp", poll_interval=0.1)
@@ -247,7 +268,6 @@ async def test_monitor_wtmp_nonexistent_file():
     assert len(events) == 0
 
 
-@pytest.mark.asyncio
 async def test_monitor_wtmp_new_records():
     """Test wtmp monitor detecting new login records."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -287,7 +307,6 @@ async def test_monitor_wtmp_new_records():
             pytest.fail("Monitor did not detect new wtmp record in time")
 
 
-@pytest.mark.asyncio
 async def test_monitor_wtmp_deduplication():
     """Test that wtmp monitor deduplicates records."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -331,7 +350,6 @@ async def test_monitor_wtmp_deduplication():
         assert len(events) == 1
 
 
-@pytest.mark.asyncio
 async def test_monitor_wtmp_file_rotation():
     """Test wtmp monitor handling file rotation."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -373,7 +391,6 @@ async def test_monitor_wtmp_file_rotation():
         assert any(e.username == "bob" for e in events)
 
 
-@pytest.mark.asyncio
 async def test_monitor_utmp_nonexistent_file():
     """Test utmp monitor with non-existent file."""
     monitor = AccountingFilesMonitor(utmp_path="/nonexistent/utmp", poll_interval=0.1)
@@ -387,7 +404,6 @@ async def test_monitor_utmp_nonexistent_file():
     assert len(events) == 0
 
 
-@pytest.mark.asyncio
 async def test_monitor_utmp_new_user():
     """Test utmp monitor detecting new logged-in user."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -432,7 +448,6 @@ async def test_monitor_utmp_new_user():
         assert all(e.monitor_source == "utmp" for e in events)
 
 
-@pytest.mark.asyncio
 async def test_monitor_wtmp_non_login_records_ignored():
     """Test that non-login records are ignored."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -464,7 +479,6 @@ async def test_monitor_wtmp_non_login_records_ignored():
             pytest.fail("Monitor did not detect login record")
 
 
-@pytest.mark.asyncio
 async def test_monitor_wtmp_file_truncation():
     """Test wtmp monitor handling file truncation."""
     with tempfile.TemporaryDirectory() as temp_dir:
