@@ -41,7 +41,8 @@ def _initialize_components(
             window_seconds=config.deduplication.window_seconds
         )
         logger.info(
-            "Event deduplication enabled (window: %ss)", config.deduplication.window_seconds
+            "Event deduplication enabled (window: %ss)",
+            config.deduplication.window_seconds,
         )
     else:
         logger.info("Event deduplication disabled")
@@ -65,7 +66,10 @@ def _create_login_event_handler(
     async def handle_login_event(event: LoginEvent):
         """Handle a detected login event."""
         logger.info(
-            "Login detected: %s via %s from %s", event.username, event.login_type, event.source_ip or "local"
+            "Login detected: %s via %s from %s",
+            event.username,
+            event.login_type,
+            event.source_ip or "local",
         )
 
         defused = await defuse_handler.initiate_defuse(event)
