@@ -65,6 +65,14 @@ def _create_login_event_handler(
 
     async def handle_login_event(event: LoginEvent):
         """Handle a detected login event."""
+        if event.login_type in config.alerts.ignored_login_types:
+            logger.debug(
+                "Ignoring login type %s for user %s (filtered by config)",
+                event.login_type,
+                event.username,
+            )
+            return
+
         logger.info(
             "Login detected: %s via %s from %s",
             event.username,

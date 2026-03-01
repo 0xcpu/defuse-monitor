@@ -42,6 +42,7 @@ class AlertsConfig(BaseModel):
 
     enabled: bool = True
     rate_limit_per_hour: int = 10
+    ignored_login_types: list[str] = []
     discord: DiscordConfig = DiscordConfig()
 
 

@@ -3,8 +3,16 @@
 import asyncio
 import logging
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
-from defuse_monitor.__main__ import LogLevel, _create_monitor_tasks
+import pytest
+
+from defuse_monitor.__main__ import (
+    LogLevel,
+    _create_login_event_handler,
+    _create_monitor_tasks,
+)
+from defuse_monitor.core.config import AlertsConfig, Config
 from defuse_monitor.core.dispatcher import EventDispatcher
 from defuse_monitor.core.events import LoginEvent
 
@@ -74,3 +82,93 @@ async def test_event_dispatcher_no_handlers():
         monitor_source="test",
     )
     await dispatcher.dispatch(event)  # Should not raise
+
+
+def make_event(login_type: str) -> LoginEvent:
+    return LoginEvent(
+        username="ubuntu",
+        source_ip=None,
+        login_type=login_type,
+        timestamp=datetime.now(),
+        monitor_source="auth_log",
+    )
+
+
+def make_config(ignored_login_types: list[str]) -> Config:
+    config = Config()
+    config.alerts = AlertsConfig(ignored_login_types=ignored_login_types)
+    return config
+
+
+@pytest.mark.asyncio
+async def test_ignored_login_type_does_not_alert():
+    config = make_config(["console", "other"])
+    defuse_handler = MagicMock()
+    defuse_handler.initiate_defuse = AsyncMock(return_value=False)
+    alert_dispatcher = MagicMock()
+    alert_dispatcher.send_alert = AsyncMock()
+
+    handler = _create_login_event_handler(defuse_handler, alert_dispatcher, config)
+    await handler(make_event("other"))
+
+    alert_dispatcher.send_alert.assert_not_called()
+    defuse_handler.initiate_defuse.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_non_ignored_login_type_does_alert():
+    config = make_config(["console", "other"])
+    defuse_handler = MagicMock()
+    defuse_handler.initiate_defuse = AsyncMock(return_value=False)
+    alert_dispatcher = MagicMock()
+    alert_dispatcher.send_alert = AsyncMock()
+
+    handler = _create_login_event_handler(defuse_handler, alert_dispatcher, config)
+    await handler(make_event("ssh"))
+
+    alert_dispatcher.send_alert.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_empty_ignored_list_alerts_everything():
+    config = make_config([])
+    defuse_handler = MagicMock()
+    defuse_handler.initiate_defuse = AsyncMock(return_value=False)
+    alert_dispatcher = MagicMock()
+    alert_dispatcher.send_alert = AsyncMock()
+
+    handler = _create_login_event_handler(defuse_handler, alert_dispatcher, config)
+    await handler(make_event("console"))
+
+    alert_dispatcher.send_alert.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_alerts_disabled_does_not_alert():
+    """When alerts are globally disabled, send_alert must not be called."""
+    config = make_config([])
+    config.alerts.enabled = False
+    defuse_handler = MagicMock()
+    defuse_handler.initiate_defuse = AsyncMock(return_value=False)
+    alert_dispatcher = MagicMock()
+    alert_dispatcher.send_alert = AsyncMock()
+
+    handler = _create_login_event_handler(defuse_handler, alert_dispatcher, config)
+    await handler(make_event("ssh"))
+
+    alert_dispatcher.send_alert.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_defuse_success_does_not_alert():
+    """When the defuse handler returns True (defused), send_alert must not be called."""
+    config = make_config([])
+    defuse_handler = MagicMock()
+    defuse_handler.initiate_defuse = AsyncMock(return_value=True)
+    alert_dispatcher = MagicMock()
+    alert_dispatcher.send_alert = AsyncMock()
+
+    handler = _create_login_event_handler(defuse_handler, alert_dispatcher, config)
+    await handler(make_event("ssh"))
+
+    alert_dispatcher.send_alert.assert_not_called()
