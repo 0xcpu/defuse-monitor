@@ -202,7 +202,7 @@ class AuthLogMonitor:
                 )
             elif pattern_name == "systemd_login":
                 session_id = match.group(1)
-                username = match.group(2)
+                username = match.group(2).removesuffix(".")
                 return LoginEvent(
                     username=username,
                     source_ip=None,

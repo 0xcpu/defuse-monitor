@@ -16,6 +16,8 @@ require_signature = false
 [alerts]
 enabled = true
 rate_limit_per_hour = 10
+# Login types to suppress entirely. Valid values: "ssh", "console", "su", "other"
+# ignored_login_types = ["console", "other"]
 
 [alerts.discord]
 enabled = true
