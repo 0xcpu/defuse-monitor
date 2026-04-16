@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import struct
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -204,18 +205,26 @@ class AccountingFilesMonitor:
             and bool(record["user"].strip())
         )
 
+    _LOCAL_HOST_PATTERNS = re.compile(
+        r"^(tmux\(|screen[./]|:[\d]+(\.\d+)?$)"
+    )
+
+    def _is_remote_host(self, host: str) -> bool:
+        """Check if host looks like a remote connection (IP or hostname)."""
+        return bool(host) and not self._LOCAL_HOST_PATTERNS.search(host)
+
     def _record_to_login_event(self, record: dict[str, Any], source: str) -> LoginEvent:
         """Convert utmp record to LoginEvent."""
         line = record["line"]
         host = record["host"]
 
         login_type: Literal["ssh", "console", "su", "other"]
-        if host and (line.startswith("pts/") or line.startswith("tty")):
+        if self._is_remote_host(host) and (line.startswith("pts/") or line.startswith("tty")):
             login_type = "ssh"
         elif line.startswith("tty"):
             login_type = "console"
         elif line.startswith("pts/"):
-            login_type = "other"  # could be tmux, screen, GUI terminal
+            login_type = "other"
         else:
             login_type = "other"
 
