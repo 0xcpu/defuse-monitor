@@ -255,6 +255,40 @@ def test_record_to_login_event_pts_without_host():
     assert event.source_ip is None
 
 
+@pytest.mark.parametrize(
+    "host,expected_type",
+    [
+        ("tmux(10117).%1", "other"),
+        ("tmux(999).%0", "other"),
+        ("screen.linux", "other"),
+        ("screen/pts-1", "other"),
+        (":0", "other"),
+        (":1.0", "other"),
+        ("192.168.1.100", "ssh"),
+        ("myhost.example.com", "ssh"),
+        ("10.0.0.1", "ssh"),
+    ],
+)
+def test_record_to_login_event_local_host_patterns(host, expected_type):
+    """Test that tmux, screen, and X display hosts are classified as 'other', not 'ssh'."""
+    monitor = AccountingFilesMonitor()
+    record = {
+        "type": USER_PROCESS,
+        "pid": 5000,
+        "user": "ubuntu",
+        "host": host,
+        "line": "pts/2",
+        "session": 100,
+        "timestamp": monitor.parse_utmp_record(create_utmp_record(tv_sec=1700000000))[
+            "timestamp"
+        ],
+    }
+
+    event = monitor._record_to_login_event(record, "utmp")
+
+    assert event.login_type == expected_type
+
+
 async def test_monitor_wtmp_nonexistent_file():
     """Test wtmp monitor with non-existent file."""
     monitor = AccountingFilesMonitor(wtmp_path="/nonexistent/wtmp", poll_interval=0.1)
