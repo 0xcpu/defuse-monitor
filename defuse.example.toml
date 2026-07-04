@@ -12,6 +12,7 @@ window_seconds = 10
 timeout_seconds = 60
 artifact_directory = "/tmp/defuse"
 require_signature = false
+# secret = "<random-string>"  # salts the defuse artifact filename; if omitted a random per-run secret is generated (read the log for the artifact filename)
 
 [alerts]
 enabled = true

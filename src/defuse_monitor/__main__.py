@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+import secrets
 import signal
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -47,9 +48,16 @@ def _initialize_components(
     else:
         logger.info("Event deduplication disabled")
 
+    secret = config.defuse.secret or secrets.token_hex(16)
+    if not config.defuse.secret:
+        logger.warning(
+            "No defuse secret configured; generated an ephemeral per-run secret. "
+            "The defuse artifact filename is logged when a login is detected."
+        )
     defuse_handler = DefuseHandler(
         timeout_seconds=config.defuse.timeout_seconds,
         artifact_directory=config.defuse.artifact_directory,
+        secret=secret,
     )
     alert_dispatcher = AlertDispatcher(
         discord_enabled=config.alerts.discord.enabled,
@@ -125,16 +133,28 @@ def _initialize_monitors(config: Config) -> list[tuple[str, AsyncIterator[LoginE
 
 
 def _create_monitor_tasks(
-    monitors, event_dispatcher, deduplicator: EventDeduplicator | None
+    monitors,
+    event_dispatcher,
+    deduplicator: EventDeduplicator | None,
+    ignored_login_types=None,
 ) -> list[asyncio.Task]:
     """Create monitoring tasks for all monitors."""
     tasks = []
 
     async def monitor_wrapper(name, async_gen):
         logger.info("Starting monitor: %s", name)
+        dispatch_tasks: set[asyncio.Task] = set()
         try:
             async for event in async_gen:
                 logger.debug("Monitor %s received event: %s", name, event)
+
+                if ignored_login_types and event.login_type in ignored_login_types:
+                    logger.debug(
+                        "Ignoring login type %s for user %s (filtered by config)",
+                        event.login_type,
+                        event.username,
+                    )
+                    continue
 
                 if deduplicator:
                     processed_event = await deduplicator.process_event(event)
@@ -144,12 +164,21 @@ def _create_monitor_tasks(
 
                     event = processed_event
 
-                await event_dispatcher.dispatch(event)
+                task = asyncio.create_task(event_dispatcher.dispatch(event))
+                dispatch_tasks.add(task)
+                task.add_done_callback(dispatch_tasks.discard)
+
+            logger.warning("Monitor %s stopped producing events", name)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.error("Monitor %s failed: %s", name, e, exc_info=True)
             logger.warning("Monitor %s will not be restarted automatically", name)
+        finally:
+            pending = list(dispatch_tasks)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
 
     for monitor_name, monitor_async_gen in monitors:
         task = asyncio.create_task(monitor_wrapper(monitor_name, monitor_async_gen))
@@ -206,7 +235,12 @@ async def main_loop(config: Config):
         logger.error("No monitors could be initialized")
         return
 
-    tasks = _create_monitor_tasks(monitors, event_dispatcher, deduplicator)
+    tasks = _create_monitor_tasks(
+        monitors,
+        event_dispatcher,
+        deduplicator,
+        config.alerts.ignored_login_types,
+    )
     logger.info("Started %d monitoring tasks", len(tasks))
 
     shutdown_event = _setup_signal_handlers()
@@ -230,8 +264,8 @@ def main():
     parser.add_argument(
         "--log-level",
         choices=[level.value for level in LogLevel],
-        default="INFO",
-        help="Logging level",
+        default=None,
+        help="Logging level (overrides the config file when provided)",
     )
 
     args = parser.parse_args()
@@ -239,10 +273,8 @@ def main():
     try:
         config = Config.load(args.config)
 
-        if hasattr(config, "logging"):
-            log_level = getattr(logging, config.logging.level)
-        else:
-            log_level = getattr(logging, args.log_level)
+        level_name = args.log_level if args.log_level else config.logging.level
+        log_level = getattr(logging, level_name)
 
         logging.basicConfig(
             level=log_level,

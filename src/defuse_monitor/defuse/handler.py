@@ -14,15 +14,18 @@ class DefuseHandler:
     """Handle defuse mechanism for login alerts."""
 
     def __init__(
-        self, timeout_seconds: int = 60, artifact_directory: str = "/var/run/defuse"
+        self,
+        timeout_seconds: int = 60,
+        artifact_directory: str = "/var/run/defuse",
+        secret: str | None = None,
     ):
         self.timeout_seconds = timeout_seconds
         self.artifact_directory = Path(artifact_directory)
+        self.secret = secret
         self._active_sessions: dict[str, asyncio.Task] = {}
 
-    @staticmethod
-    def generate_artifact_filename(username: str, timestamp_iso: str) -> str:
-        """Generate predictable artifact filename from username and timestamp.
+    def generate_artifact_filename(self, username: str, timestamp_iso: str) -> str:
+        """Generate artifact filename from username, timestamp and secret salt.
 
         Args:
             username: The username from the login event
@@ -31,7 +34,7 @@ class DefuseHandler:
         Returns:
             SHA256 hex digest that can be used as filename
         """
-        hash_input = f"{username}:{timestamp_iso}".encode()
+        hash_input = f"{username}:{timestamp_iso}:{self.secret or ''}".encode()
         return hashlib.sha256(hash_input).hexdigest()
 
     async def initiate_defuse(self, login_event: LoginEvent) -> bool:
@@ -48,12 +51,11 @@ class DefuseHandler:
         logger.info("Waiting for artifact at: %s", artifact_path)
 
         try:
-            self.artifact_directory.mkdir(parents=True, exist_ok=True)
+            self.artifact_directory.mkdir(mode=0o700, parents=True, exist_ok=True)
             defused = await self.wait_for_artifact(artifact_path, self.timeout_seconds)
             if defused:
                 logger.info("Login defused for %s", login_event.username)
-                if artifact_path.exists():
-                    artifact_path.unlink()
+                artifact_path.unlink(missing_ok=True)
             else:
                 logger.warning("Defuse timeout for %s", login_event.username)
 
@@ -69,7 +71,7 @@ class DefuseHandler:
         start_time = asyncio.get_running_loop().time()
 
         while True:
-            if path.exists():
+            if path.is_file() and not path.is_symlink():
                 logger.info("Artifact found: %s", path)
                 return True
 

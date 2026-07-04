@@ -365,6 +365,34 @@ async def test_deduplicator_partial_data_enrichment(deduplicator):
     assert cached_event.detected_by == ["auth_log", "utmp"]
 
 
+async def test_deduplicator_fieldless_event_does_not_suppress_ssh(deduplicator):
+    """A fieldless local event must not absorb a real remote SSH login."""
+    timestamp = datetime.now(UTC)
+
+    # Cached fieldless event (e.g. systemd "New session" / su with no source_ip)
+    event1 = LoginEvent(
+        username="root",
+        login_type="other",
+        timestamp=timestamp,
+        monitor_source="auth_log",
+    )
+
+    # Incoming real SSH login carrying a remote source_ip
+    event2 = LoginEvent(
+        username="root",
+        source_ip="203.0.113.7",
+        login_type="ssh",
+        timestamp=timestamp,
+        monitor_source="auth_log",
+    )
+
+    result1 = await deduplicator.process_event(event1)
+    result2 = await deduplicator.process_event(event2)
+
+    assert result1 is not None
+    assert result2 is not None  # SSH login must not be suppressed
+
+
 async def test_deduplicator_concurrent_events(deduplicator):
     """Test that deduplicator handles concurrent events correctly."""
     timestamp = datetime.now(UTC)
