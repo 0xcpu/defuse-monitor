@@ -34,6 +34,7 @@ class _LogFileHandler(FileSystemEventHandler):
         self._current_inode = None
         self._position: int = 0
         self._partial_line: str = ""
+        self._started = False
         self._background_tasks = set()
 
     def set_queue_and_loop(
@@ -117,12 +118,22 @@ class _LogFileHandler(FileSystemEventHandler):
             )
             current_stat = self.monitor.log_path.stat()
             self._current_inode = current_stat.st_ino
-            # start from the end of the file
-            self._file_handle.seek(0, 2)
+            if not self._started:
+                # tail from the end only on the initial open
+                self._file_handle.seek(0, 2)
+                self._started = True
+            else:
+                self._file_handle.seek(self._position)
             self._position = self._file_handle.tell()
 
     async def _read_and_process_new_content(self):
         """Read new content and process complete lines."""
+        self._file_handle.seek(0, 2)
+        if self._file_handle.tell() < self._position:
+            logger.info("Auth log truncation detected, resetting position")
+            self._position = 0
+            self._partial_line = ""
+
         self._file_handle.seek(self._position)
         new_content = self._file_handle.read()
 
@@ -152,6 +163,7 @@ class AuthLogMonitor:
     PATTERNS: ClassVar = {
         "ssh_login": r"sshd\[\d+\]: Accepted \w+ for (\S+) from (\S+)",
         "su_login": r"su\[\d+\]: Successful su for (\S+) by (\S+)",
+        "su_util_linux": r"su(?:\[\d+\])?: \(to (\S+)\) \S+ on \S+",
         "console_login": r"login\[\d+\]: LOGIN ON (\S+) BY (\S+)",
         "systemd_login": r"systemd-logind\[\d+\]: New session (\d+) of user (\S+)",
     }
@@ -181,7 +193,7 @@ class AuthLogMonitor:
                     timestamp=timestamp,
                     monitor_source="auth_log",
                 )
-            elif pattern_name == "su_login":
+            elif pattern_name in ("su_login", "su_util_linux"):
                 return LoginEvent(
                     username=match.group(1),
                     source_ip=None,  # su is local
@@ -300,7 +312,11 @@ class AuthLogMonitor:
         """Read and process new content from log file."""
         try:
             current_stat = self.log_path.stat()
-            if current_stat.st_size <= last_position:
+            if current_stat.st_size < last_position:
+                logger.info("Auth log truncation detected, resetting position")
+                last_position = 0
+                partial_line = ""
+            elif current_stat.st_size == last_position:
                 return [], last_position, partial_line
 
             with open(self.log_path, encoding="utf-8", errors="replace") as f:

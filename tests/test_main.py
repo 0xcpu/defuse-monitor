@@ -46,6 +46,42 @@ async def test_monitor_wrapper_logs_warning_on_failure(caplog):
     )
 
 
+async def test_dispatch_does_not_block_ingestion():
+    """A slow handler must not block the monitor from dispatching later events."""
+    dispatcher = EventDispatcher()
+    release = asyncio.Event()
+    entered = 0
+
+    async def blocking_handler(event):
+        nonlocal entered
+        entered += 1
+        await release.wait()
+
+    dispatcher.register_handler(blocking_handler)
+
+    never = asyncio.Event()
+
+    async def two_event_monitor():
+        yield make_event("ssh")
+        yield make_event("console")
+        await never.wait()
+
+    monitors = [("test", two_event_monitor())]
+    tasks = _create_monitor_tasks(monitors, dispatcher, None)
+
+    for _ in range(10):
+        await asyncio.sleep(0)
+        if entered == 2:
+            break
+
+    assert entered == 2
+
+    release.set()
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
 async def test_event_dispatcher_calls_handlers():
     """Test that dispatcher calls all registered handlers."""
     dispatcher = EventDispatcher()

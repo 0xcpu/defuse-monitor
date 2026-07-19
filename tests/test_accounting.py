@@ -458,7 +458,7 @@ async def test_monitor_utmp_new_user():
 
         task = asyncio.create_task(collect_events())
 
-        # Give it time to read initial state (alice will be detected as "new")
+        # Give it time to seed baseline (alice must NOT be emitted)
         await asyncio.sleep(0.15)
 
         # Add new user to utmp
@@ -474,11 +474,10 @@ async def test_monitor_utmp_new_user():
         except asyncio.CancelledError:
             pass
 
-        # Should have detected both alice (on startup) and bob (new login)
-        assert len(events) >= 2
+        # Should detect only bob (new login), not alice (baseline)
         usernames = [e.username for e in events]
-        assert "alice" in usernames
         assert "bob" in usernames
+        assert "alice" not in usernames
         assert all(e.monitor_source == "utmp" for e in events)
 
 
@@ -553,3 +552,19 @@ async def test_monitor_wtmp_file_truncation():
 
         # Should detect record after truncation
         assert any(e.username == "charlie" for e in events)
+
+
+def test_seen_records_bounded():
+    """Test that _seen_records does not grow past MAX_SEEN_RECORDS."""
+    monitor = AccountingFilesMonitor()
+
+    count = monitor.MAX_SEEN_RECORDS + 100
+    data = b"".join(
+        create_utmp_record(pid=i, user=f"user{i}", tv_sec=1700000000 + i)
+        for i in range(count)
+    )
+
+    events = monitor._process_new_wtmp_records(data)
+
+    assert len(events) == count
+    assert len(monitor._seen_records) <= monitor.MAX_SEEN_RECORDS

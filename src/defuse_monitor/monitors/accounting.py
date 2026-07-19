@@ -32,6 +32,7 @@ class AccountingFilesMonitor:
     # Based on /usr/include/bits/utmp.h
     UTMP_FORMAT = "hi32s4s32s256shhiii4i20x"  # Total: 384 bytes
     UTMP_SIZE = struct.calcsize(UTMP_FORMAT)
+    MAX_SEEN_RECORDS = 10000
 
     def __init__(
         self,
@@ -43,7 +44,8 @@ class AccountingFilesMonitor:
         self.utmp_path = Path(utmp_path)
         self.poll_interval = poll_interval
         # TODO: implement an enum or dataclass
-        self._seen_records: set[tuple[int, str, int]] = set()  # (pid, user, timestamp)
+        # bounded FIFO keyed by (pid, user, timestamp)
+        self._seen_records: dict[tuple[int, str, int], None] = {}
         self._wtmp_was_missing = False
 
     def _check_file_exists(self, file_path: Path, file_type: str) -> bool:
@@ -92,7 +94,9 @@ class AccountingFilesMonitor:
             if record and self._is_login_record(record):
                 record_key = (record["pid"], record["user"], record["tv_sec"])
                 if record_key not in self._seen_records:
-                    self._seen_records.add(record_key)
+                    self._seen_records[record_key] = None
+                    if len(self._seen_records) > self.MAX_SEEN_RECORDS:
+                        self._seen_records.pop(next(iter(self._seen_records)))
                     events.append(self._record_to_login_event(record, "wtmp"))
 
             offset += self.UTMP_SIZE
@@ -205,9 +209,7 @@ class AccountingFilesMonitor:
             and bool(record["user"].strip())
         )
 
-    _LOCAL_HOST_PATTERNS = re.compile(
-        r"^(tmux\(|screen[./]|:[\d]+(\.\d+)?$)"
-    )
+    _LOCAL_HOST_PATTERNS = re.compile(r"^(tmux\(|screen[./]|:[\d]+(\.\d+)?$)")
 
     def _is_remote_host(self, host: str) -> bool:
         """Check if host looks like a remote connection (IP or hostname)."""
@@ -219,7 +221,9 @@ class AccountingFilesMonitor:
         host = record["host"]
 
         login_type: Literal["ssh", "console", "su", "other"]
-        if self._is_remote_host(host) and (line.startswith("pts/") or line.startswith("tty")):
+        if self._is_remote_host(host) and (
+            line.startswith("pts/") or line.startswith("tty")
+        ):
             login_type = "ssh"
         elif line.startswith("tty"):
             login_type = "console"
@@ -291,7 +295,10 @@ class AccountingFilesMonitor:
         if not self._check_file_exists(self.utmp_path, "utmp"):
             return
 
-        current_users: dict[tuple[int, str], dict[str, Any]] = {}
+        current_users: dict[tuple[int, str], dict[str, Any]] = {
+            (record["pid"], record["user"]): record
+            for record in self._read_records_from_file(self.utmp_path)
+        }
 
         while True:
             try:

@@ -14,7 +14,7 @@ def test_ignored_login_types_can_be_set():
 def test_config_loads_ignored_login_types(tmp_path):
     toml_file = tmp_path / "defuse.toml"
     toml_file.write_text(
-        "[alerts]\nignored_login_types = [\"console\", \"other\"]\n"
+        '[alerts]\nignored_login_types = ["console", "other"]\n'
         "[alerts.discord]\nenabled = false\n"
     )
     config = Config.load(toml_file)

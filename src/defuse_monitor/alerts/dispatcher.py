@@ -1,5 +1,6 @@
 """Alert dispatcher for login events."""
 
+import asyncio
 import logging
 
 import aiohttp
@@ -58,22 +59,43 @@ class AlertDispatcher:
             logger.error("Discord webhook URL not configured")
             return
 
-        try:
-            data = {
-                "content": message,
-                "username": "Defuse Monitor",
-                "avatar_url": None,
-            }
+        data = {
+            "content": message,
+            "username": "Defuse Monitor",
+            "avatar_url": None,
+        }
 
-            session = await self._get_session()
-            async with session.post(self.webhook_url, json=data) as response:
-                if response.status == 204:  # Discord webhook returns 204 on success
-                    logger.info("Discord webhook alert sent successfully")
-                else:
-                    logger.error("Discord webhook failed: %s", response.status)
+        timeout = aiohttp.ClientTimeout(total=10)
+        max_attempts = 3
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                session = await self._get_session()
+                async with session.post(
+                    self.webhook_url, json=data, timeout=timeout
+                ) as response:
+                    if response.status == 204:  # Discord webhook returns 204 on success
+                        logger.info("Discord webhook alert sent successfully")
+                        return
                     error_text = await response.text()
-                    logger.error("Discord webhook error: %s", error_text)
+                    logger.error(
+                        "Discord webhook failed (attempt %d/%d): %s %s",
+                        attempt,
+                        max_attempts,
+                        response.status,
+                        error_text,
+                    )
+            except (aiohttp.ClientError, TimeoutError) as e:
+                logger.error(
+                    "Discord webhook attempt %d/%d failed: %s",
+                    attempt,
+                    max_attempts,
+                    e,
+                )
 
-        except Exception as e:
-            logger.error("Discord webhook alert failed: %s", e)
-            logger.warning("Discord Alert (NOT SENT): %s", message)
+            if attempt < max_attempts:
+                await asyncio.sleep(2 ** (attempt - 1))
+
+        logger.warning(
+            "Discord Alert (NOT SENT after %d attempts): %s", max_attempts, message
+        )

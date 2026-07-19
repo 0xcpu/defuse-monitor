@@ -101,6 +101,17 @@ class EventDeduplicator:
         ):
             return False
 
+        # A login carrying a remote source_ip is materially distinct from a cached
+        # event that has neither a matching source_ip nor any other corroborating
+        # identifier; do not let a fieldless event absorb (and suppress) a real login.
+        if (
+            event2.source_ip
+            and event1.source_ip != event2.source_ip
+            and not (event1.session_id and event1.session_id == event2.session_id)
+            and not (event1.tty and event1.tty == event2.tty)
+        ):
+            return False
+
         if (
             event1.session_id
             and event2.session_id

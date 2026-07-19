@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from defuse_monitor.core.config import Config, DiscordConfig
+from defuse_monitor.core.config import Config, DiscordConfig, LoggingConfig
 
 
 def test_discord_config_valid_url():
@@ -29,6 +29,29 @@ def test_discord_config_none_url():
     """Test that None webhook URL is accepted."""
     config = DiscordConfig(enabled=False, webhook_url=None)
     assert config.webhook_url is None
+
+
+def test_discord_config_enabled_without_url():
+    """Test that enabling Discord without a webhook URL is rejected."""
+    with pytest.raises(ValidationError):
+        DiscordConfig(enabled=True, webhook_url=None)
+
+
+def test_logging_level_normalized():
+    """Test that a lowercase logging level is normalized to uppercase."""
+    assert LoggingConfig(level="debug").level == "DEBUG"
+
+
+def test_logging_level_invalid():
+    """Test that an unknown logging level is rejected."""
+    with pytest.raises(ValidationError):
+        LoggingConfig(level="TRACE")
+
+
+def test_config_unknown_section():
+    """Test that an unknown top-level section is rejected."""
+    with pytest.raises(ValidationError):
+        Config(**{"bogus": {"x": 1}})
 
 
 def test_config_load_valid():
